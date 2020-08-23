@@ -3,6 +3,7 @@
  */
 const DB_USER = "admin"
 const DB_PASS = "admin"
+const TEAMS_DB_NAME = "teams"
 const POLLS_DB_NAME = "polls"
 const PROPOSALS_DB_NAME = "proposals"
 const USERS_DB_NAME = "users"
@@ -10,9 +11,37 @@ const USERS_DB_NAME = "users"
 const nano = require('nano')({
 	url: 'http://' + DB_USER + ':' + DB_PASS + '@localhost:5984',
 })
+let teams = nano.use(TEAMS_DB_NAME)
 let polls = nano.use(POLLS_DB_NAME)
 let proposals = nano.use(PROPOSALS_DB_NAME)
 let users = nano.use(USERS_DB_NAME)
+
+/**
+ * Create a new Team
+ * @param {JSON} newTeam = {
+ *   teamname: "My new Team",
+ *   admin = {
+ *     name: "John Doe",
+ *     email: "john@yahoo.com"
+ *   }
+ * }
+ */
+let createNewTeam = async function (newTeam) {
+	console.log("Creating new Team in DB: ", newTeam)
+	if (!isAlphanumeric(newTeam.name)) {
+		throw new Error("Team 'name' must be alphanueric: " + newTeam.name)
+	}
+	if (!isAlphanumeric(newTeam.admin)) {
+		throw new Error("New team 'admin' must be alphanumeric: " + newTeam.admin)
+	}
+	if (!await userExists(newTeam.admin)) {
+		console.log("Creating new admin user with id=" + newTeam.admin)
+		users
+	}
+
+	await teams.insert(newTeam).catch(err => console.log(err))
+	return "Team created"
+}
 
 /** 
  Get polls by their ID, optinally filtered by poll.status
@@ -73,7 +102,24 @@ let getPollsById = async function (status = undefined) {
 	return pollsById
 }
 
-module.exports = {
-	"getPollsById": getPollsById,
+//
+// ===== Utility functions =====
+//
 
+var isAlphanumeric = function (str) {
+	return str && str.match(/^[a-zA-Z0-9-_]+$/)
+}
+
+var userExists = async function (id) {
+	//console.log("Check if user exists", id)
+	return users.head(id).then(data => {
+		return data.statusCode === 200
+	}).catch(err => {
+		return false
+	})
+}
+
+module.exports = {
+	getPollsById: getPollsById,
+	createNewTeam: createNewTeam,
 }

@@ -34,6 +34,22 @@ let dummy_users = [
 ]
 
 //
+// ====================== TEAMS ====================
+// 
+let dummy_teams = [
+	{
+		_id: "team-1",
+		name: "TeamEins",
+		admin: "user-1",
+	},
+	{
+		_id: "team-2",
+		name: "TeamZwei",
+		admin: "user-2",
+	}
+]
+
+//
 // ====================== POLLS ====================
 // 
 
@@ -124,10 +140,13 @@ let dummy_proposals = [
 
 const DB_USER = "admin"
 const DB_PASS = "admin"
+
+const TEAMS_DB_NAME = "teams"
 const POLLS_DB_NAME = "polls"
 const PROPOSALS_DB_NAME = "proposals"
 const USERS_DB_NAME = "users"
-let polls, proposals, users
+
+let team, polls, proposals, users
 
 
 const nano = require('nano')({
@@ -137,6 +156,10 @@ const nano = require('nano')({
 
 
 async function recreateDBs() {
+	await nano.db.destroy(TEAMS_DB_NAME).catch(err => { })
+	await nano.db.create(TEAMS_DB_NAME)
+	teams = nano.use(TEAMS_DB_NAME)
+
 	await nano.db.destroy(POLLS_DB_NAME).catch(err => { })
 	await nano.db.create(POLLS_DB_NAME)
 	polls = nano.use(POLLS_DB_NAME)
@@ -154,6 +177,13 @@ async function seedUsers() {
 	console.log("=== Seed " + USERS_DB_NAME)
 	await users.bulk({ docs: dummy_users }).then(res => {
 		console.log("    Created %s users", res.length)
+	})
+}
+
+async function seedTeams() {
+	console.log("=== Seed " + TEAMS_DB_NAME)
+	await teams.bulk({ docs: dummy_teams }).then(res => {
+		console.log("    Created %s teams", res.length)
 	})
 }
 
@@ -222,8 +252,9 @@ async function seedPolls() {
 
 console.log("======== Recreate data in TEST DB ==========")
 async function seedTestData() {
-	await recreateDBs();
+	await recreateDBs()
 	await seedUsers()
+	await seedTeams()
 	await seedPolls()
 	await seedProposals()
 
@@ -256,11 +287,4 @@ async function seedTestData() {
 
 
 seedTestData()
-	.then(() => {
-		return getPollsById("ELABORATION")
-	})
-	.then(res => console.log(JSON.stringify(res, null, 4)))
-	.then(() => {
-		//return polls.view('polls', 'byStatus', {}).then(res => logJ(res))
-	})
 	.catch(err => console.log(err))
