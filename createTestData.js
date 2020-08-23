@@ -39,12 +39,12 @@ let dummy_users = [
 let dummy_teams = [
 	{
 		_id: "team-1",
-		name: "TeamEins",
+		teamname: "TeamEins",
 		admin: "user-1",
 	},
 	{
 		_id: "team-2",
-		name: "TeamZwei",
+		teamname: "TeamZwei",
 		admin: "user-2",
 	}
 ]
@@ -182,9 +182,21 @@ async function seedUsers() {
 
 async function seedTeams() {
 	console.log("=== Seed " + TEAMS_DB_NAME)
+	/*
 	await teams.bulk({ docs: dummy_teams }).then(res => {
 		console.log("    Created %s teams", res.length)
 	})
+	*/
+
+	await teams.insert({
+		"views": {
+			"byTeamname": {
+				"map": function (doc) {
+					emit(doc.teamname, { "_id": doc._id, "_rev": doc._rev })
+				}
+			}
+		}
+	}, "_design/" + TEAMS_DB_NAME)
 }
 
 async function seedProposals() {

@@ -1,6 +1,6 @@
 console.log("Starting liquido mobile backend ...")
 
-const liquidoDB = require('./liquidoDB')
+const liquidoDB = require('./liquido.couchDB')
 const express = require('express')
 const app = express()
 const port = 3000

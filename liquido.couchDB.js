@@ -20,27 +20,39 @@ let users = nano.use(USERS_DB_NAME)
  * Create a new Team
  * @param {JSON} newTeam = {
  *   teamname: "My new Team",
- *   admin = {
+ *   admin: {
  *     name: "John Doe",
  *     email: "john@yahoo.com"
  *   }
  * }
  */
 let createNewTeam = async function (newTeam) {
-	console.log("Creating new Team in DB: ", newTeam)
-	if (!isAlphanumeric(newTeam.name)) {
-		throw new Error("Team 'name' must be alphanueric: " + newTeam.name)
+	console.log("Creating new Team in DB: ", JSON.stringify(newTeam))
+	if (!isText(newTeam.teamname)) {
+		throw new Error("Need 'teamname' as text: " + newTeam.teamname)
 	}
-	if (!isAlphanumeric(newTeam.admin)) {
-		throw new Error("New team 'admin' must be alphanumeric: " + newTeam.admin)
+	if (await teamExists(newTeam.teamname)) {
+		throw new Error("Team '" + newTeam.teamname + "' already exists.")
 	}
-	if (!await userExists(newTeam.admin)) {
-		console.log("Creating new admin user with id=" + newTeam.admin)
-		users
+	if (!newTeam.admin || !isText(newTeam.admin.name)) {
+		throw new Error("New team 'admin.name' must be alphanumeric: " + newTeam.admin)
 	}
 
-	await teams.insert(newTeam).catch(err => console.log(err))
-	return "Team created"
+	var teamIdAndRev = await teams.insert({
+		teamname: newTeam.teamname,
+		adminId: undefined                 // will be set later
+	})
+	var adminIdAndRev = await users.insert({
+		teamId: teamIdAndRev.id,
+		name: newTeam.admin.name,
+		email: newTeam.admin.email
+	})
+
+	await teams.insert({ _id: teamIdAndRev.id, _rev: teamIdAndRev.rev, adminId: adminIdAndRev.id, foo: "bar" }).catch(err => logJ(err))
+
+	let msg = "... new team created successfully: " + newTeam
+	console.log(msg)
+	return msg
 }
 
 /** 
@@ -109,6 +121,9 @@ let getPollsById = async function (status = undefined) {
 var isAlphanumeric = function (str) {
 	return str && str.match(/^[a-zA-Z0-9-_]+$/)
 }
+var isText = function (str) {  // space is allowed
+	return str && str.match(/^[a-zA-Z0-9-_.,:;%$§ äöü]+$/)
+}
 
 var userExists = async function (id) {
 	//console.log("Check if user exists", id)
@@ -117,6 +132,24 @@ var userExists = async function (id) {
 	}).catch(err => {
 		return false
 	})
+}
+
+var teamExists = async function (teamname) {
+	console.log("Checkfinf if team exists ", teamname)
+	return await teams.view("teams", "byTeamname", {
+		key: teamname
+	}).then(data => {
+		console.log("Team Exists data", data)
+		return data.rows.length > 0
+	}).catch(err => {
+		console.log("Team exists err", err)
+		console.log("Error cannot check if team exists", err)
+		return false
+	})
+}
+
+let logJ = function (json) {
+	console.log(JSON.stringify(json, null, 4))
 }
 
 module.exports = {

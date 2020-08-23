@@ -1,3 +1,6 @@
+# Environment configurations
+config.*.js
+
 # Logs
 logs
 *.log
