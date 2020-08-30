@@ -3,6 +3,7 @@
  */
 var config = require('./config.int.js')
 var mongoose = require('mongoose');
+const { raw } = require('express');
 var Schema = mongoose.Schema
 
 // Mongoose models
@@ -304,11 +305,32 @@ async function endVotingPhase(pollId) {
 //
 // Debugging and logging utilities   
 //MAYBE: Use https://github.com/winstonjs/winston for logging but currently this little goody is all I need
+/*
+var util = require('util')
 const LOG = {
 	debug: require('debug')('mongoDB:debug'),
 	warn: require('debug')('mongoDB:warn'),
-	info: require('debug')('mongoDB')
+	info: require('debug')('mongoDB'),
+	raw: require('debug')('mongoDB'),
 }
+LOG.raw.log = function (...args) {
+	return process.stderr.write(util.format(...args));
+}
+*/
+
+var LOG = require('loglevel').getLogger("mongoDB");
+var originalFactory = LOG.methodFactory;
+LOG.methodFactory = function (methodName, logLevel, loggerName) {
+	var rawMethod = originalFactory(methodName, logLevel, loggerName)
+	return function () {
+		var messages = [loggerName, "[" + methodName.toUpperCase() + "]"];
+		for (var i = 0; i < arguments.length; i++) {
+			messages.push(arguments[i])
+		}
+		rawMethod.apply(undefined, messages)
+	}
+}
+LOG.enableAll()
 
 
 /*
