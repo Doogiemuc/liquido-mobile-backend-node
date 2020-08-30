@@ -1,5 +1,9 @@
 /**
  * Liquido Interface do CouchDB
+ * 
+ * 
+ * !!! DEPRECATED !!!!
+ * 
  */
 const DB_USER = "admin"
 const DB_PASS = "admin"

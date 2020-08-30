@@ -1,30 +1,53 @@
+/**
+ * MongoDB Adapter for LIQUIDO node backend
+ */
 var config = require('./config.int.js')
 var mongoose = require('mongoose');
-const { json } = require('express');
 var Schema = mongoose.Schema
 
 // Mongoose models
-var User, Team, Poll, Proposal
+let User, Team, Poll, Proposal
 
 /** Connect to the mongo database. */
 async function connectToDB() {
-	console.log("Connecting to MongoDB ", config.DB_URI)
+	LOG.info("Connecting to MongoDB as " + config.DB_USER + " at " + config.DB_HOST)
 
 	// Need to use { dbName: ... }  https://stackoverflow.com/questions/48917591/fail-to-connect-mongoose-to-atlas
-	mongoose.connect(config.DB_URI, { dbName: config.DB_NAME, useNewUrlParser: true, useUnifiedTopology: true })
+	await mongoose.connect(config.DB_URI, { dbName: config.DB_NAME, useNewUrlParser: true, useUnifiedTopology: true })
 
 	const db = mongoose.connection;
 	db.on('error', console.error.bind(console, 'MongoDB connection error:'));
-	/*
+
 	await db.once('open', function () {
-		console.log("  ... connected successfully.")
+		LOG.debug(" ... [OK]\n")
+	});
+}
+
+async function disconnectDB() {
+	LOG.debug("Disconnecting from " + config.DB_HOST)
+	return mongoose.disconnect()
+}
+
+async function purgeDB() {
+	return mongoose.connection.db.listCollections().toArray().then(collections => {
+		if (!collections) return Promise.resolve("Nothing to remove")
+		let tasks = collections.map(col => {
+			LOG.debug("DROPPING collection:", col.name)
+			return mongoose.connection.db.dropCollection(col.name)
+		})
+		return Promise.all(tasks)
+	})
+
+	/*
+	await mongoose.connection.db.dropDatabase(function (err, result) {
+		console.log("DROPPPED database!")
 	});
 	*/
 }
 
 /** Create the mongoose schemas (Entity Classes) */
-async function createMongoosSchemas() {
-
+function createMongoosSchemas() {
+	LOG.debug("Creating mongoose schemas")
 	var teamSchema = new Schema({
 		teamname: {
 			type: String,
@@ -99,7 +122,10 @@ async function createMongoosSchemas() {
 			type: Date,
 			default: Date.now
 		},
-		votingStartedAt: {
+		votingStartAt: {
+			type: Date
+		},
+		votingEndAt: {
 			type: Date
 		}
 	})
@@ -117,7 +143,11 @@ async function createMongoosSchemas() {
 			required: "Proposal description is required",
 		},
 		//TODO: supporters
-		//MAYBE: pollId ?
+		poll: {
+			type: Schema.Types.ObjectId,
+			ref: 'poll',
+			required: true
+		},
 		createdBy: {
 			type: Schema.Types.ObjectId,
 			ref: 'liquido-user',
@@ -132,10 +162,10 @@ async function createMongoosSchemas() {
 	/*
 	var ballotSchema = new Schema({
 		//rightToVote: ...
-		voteOrder: {
-			type: Array,
-			default: []
-		}
+		voteOrder: [{
+			type: Schema.Types.ObjectId,
+			ref: 'proposal',
+		}]
 	})
 	*/
 
@@ -148,7 +178,7 @@ async function createMongoosSchemas() {
 
 /** Create a new team with an admin */
 async function createTeam(teamName, adminName, adminEmail) {
-	LOG.debug("createTeam", teamName, adminName, adminEmail)
+	LOG.debug("createTeam(%s, %s, %s)", teamName, adminName, adminEmail)
 
 	// 0. sanity check
 	if (!teamName) return Promise.reject("Need teamName")
@@ -189,9 +219,8 @@ async function getTeam(teamname) {
 
 /** New user wants to join an existing team. User will be created. */
 async function joinTeam(inviteCode, username, userEmail) {
-	LOG.debug("joinTeam222 invite=" + inviteCode)
+	LOG.info("joinTeam(inviteCode=" + inviteCode + ")")
 	let team = await Team.findOne({ inviteCode: inviteCode })
-	console.log("(2)")
 	if (!team) return Promise.reject("Cannot find this inviteCode")
 	let user = new User({ name: username, email: userEmail })
 	await user.save()
@@ -204,7 +233,7 @@ async function createPoll(teamId, pollTitle) {
 	if (!team) return Promise.reject("Cannot create Poll. Team not found (team._id=" + teamId + ")")
 	let poll = new Poll({ title: pollTitle, team: team._id })
 	await poll.save()
-	LOG.debug("Created new poll ", poll)
+	LOG.info("Created new poll ", poll)
 	return Promise.resolve(poll)
 }
 
@@ -213,30 +242,35 @@ async function getPollsOfTeam(teamId) {
 }
 
 async function addProposalToPoll(pollId, propTitle, propDescription, createdById) {
-	let poll = await Poll.findOne({ _id: pollId })
+	LOG.debug("addProposalToPoll(pollId=%s, propTitle='%s', description='...', createdById=%s)", pollId, propTitle, createdById)
+	let poll = await Poll.findOne({ _id: pollId }).populate('proposals')
 	if (!poll) return Promise.reject("Cannot addProposalToPoll. Poll not found (poll._id=" + pollId + ")")
-	if (poll.status !== "ELABORATION") return Promise.reject("Cannot addProposalToPoll. Poll must be in status ELABORATION.")
-
-	//TODO: user must not have a proposal in this poll yet!
+	if (poll.status !== "ELABORATION") return Promise.reject("Cannot addProposalToPoll. Poll(id=" + pollId + ") must be in status ELABORATION.")
+	// user must not have a proposal in this poll yet!
+	let userIds = poll.proposals.map(prop => prop.createdBy)
+	if (userIds.includes(createdById)) return Promise.reject("Cannot addProposalToPoll. User(id=" + createdById + ") already has a proposal in poll(id=" + pollId + ")")
 
 	let prop = new Proposal({
 		title: propTitle,
 		description: propDescription,
 		createdBy: createdById,
+		poll: pollId,
 	})
 	await prop.save()
 	poll.proposals.push(prop)
-	LOG.debug("Added proposal to poll(id=" + poll._id + ")")
-	return poll.save()
+	return poll.save().then(savedPoll => {
+		LOG.info("Added proposal to poll(id=" + poll._id + ")")
+		return savedPoll
+	})
 }
 
 async function startVotingPhase(pollId) {
 	let poll = await Poll.findOne({ _id: pollId })
-	if (!poll) return Promise.reject("Cannot startVotingPhase. Poll not found (poll._id=" + pollId + ")")
-	if (poll.status !== "ELABORATION") return Promise.reject("Cannot startVotingPhase. Poll must be in status ELABORATION.")
-	if (poll.proposals.length < 2) return Promise.reject("Cannot startVotingPhase. Poll must have at least two proposals.")
+	if (!poll) return Promise.reject("Cannot startVotingPhase. Poll(id=" + pollId + ") not found.")
+	if (poll.status !== "ELABORATION") return Promise.reject("Cannot startVotingPhase. Poll(id=" + pollId + ") must be in status ELABORATION.")
+	if (poll.proposals.length < 2) return Promise.reject("Cannot startVotingPhase. Poll(id=" + pollId + ") must have at least two proposals.")
 	poll.status = "VOTING"
-	poll.votingStartedAt = Date.now()
+	poll.votingStartAt = Date.now()
 	LOG.debug("startVotingPhase of poll.id=" + pollId)
 	return poll.save()
 }
@@ -246,6 +280,9 @@ async function castVote(pollId, voteOrder) {
 	if (!poll) return Promise.reject("Cannot castVote. Poll not found (poll._id=" + pollId + ")")
 	if (poll.status !== "VOTING") return Promise.reject("Cannot castVote. Poll must be in status VOTING.")
 	if (!voteOrder || !voteOrder[0]) return Promise.reject("Cannot castVote. Need Array voteOrder.")
+
+	//TOOD: check rightToVote
+
 	poll.ballots.push({ voteOrder: voteOrder })
 	LOG.debug("castVote in poll.id=" + pollId)
 	return poll.save()
@@ -266,40 +303,19 @@ async function endVotingPhase(pollId) {
 
 //
 // Debugging and logging utilities   
-//MAYBE: USe https://github.com/winstonjs/winston for logging
-//
-const LOG_ALL = 99
-const ERROR = 3
-const INFO = 2
-const DEBUG = 1
-let LOG = {
-	level: LOG_ALL,
-	error: function (...args) {
-		if (this.level >= ERROR) console.log("[ERROR]", args.join(" "))
-	},
-	info: function (...args) {
-		if (this.level >= INFO) console.log("[INFO]", args.join(" "))
-	},
-	debug: function (...args) {
-		if (this.level >= DEBUG) console.log("[DEBUG]", args.join(" "))
-	},
-	raw(msg) {
-		process.stdout.write(msg)
-	},
-	json(json) {
-		console.log(JSON.stringify(json, null, 4))
-	}
+//MAYBE: Use https://github.com/winstonjs/winston for logging but currently this little goody is all I need
+const LOG = {
+	debug: require('debug')('mongoDB:debug'),
+	warn: require('debug')('mongoDB:warn'),
+	info: require('debug')('mongoDB')
 }
 
 
+/*
+const ttt = "team-4711"
 
-
-
-const ttt = "team-" + Date.now()
-
-async function doStuff() {
+async function runUnitTests() {
 	try {
-
 
 		let createdTeam = await createTeam(ttt, "Admin Name", ttt + "@liquido.me")
 
@@ -335,29 +351,45 @@ async function doStuff() {
 
 		await endVotingPhase(poll._id)
 
+
 	} catch (e) {
 		LOG.error("=== FATAL ===")
 		LOG.json(e)
 	}
 }
 
-LOG.info("Starting Liquido Backend Service ...")
 connectToDB()
+	.then(purgeDB)
 	.then(createMongoosSchemas)
-	.then(doStuff)
+	.then(runUnitTests)
 
-
-
-/*
-const MongoClient = require('mongodb').MongoClient;
-const client = new MongoClient( { useNewUrlParser: true, useUnifiedTopology: true }, { useNewUrlParser: true, useUnifiedTopology: true });
-
-client.connect(err => {
-	const collection = client.db("test").collection("devices");
-	// perform actions on the collection object
-
-	console.log("Connected to DB")
-
-	client.close();
-});
 */
+
+LOG.debug("Setting up LIQUIDO mongoDB")
+createMongoosSchemas()
+
+
+module.exports = {
+	connectToDB: connectToDB,
+	purgeDB: purgeDB,
+	disconnectDB: disconnectDB,
+	createMongoosSchemas: createMongoosSchemas,
+
+	// Mongoose models (e.g. with .findOne(), query() ... methods)
+	User: User,
+	Team: Team,
+	Poll: Poll,
+	Proposal: Team,
+	//Ballot: Ballot,
+
+	// Use cases
+	createTeam: createTeam,
+	joinTeam: joinTeam,
+	getTeam: getTeam,
+	createPoll: createPoll,
+	getPollsOfTeam: getPollsOfTeam,
+	addProposalToPoll: addProposalToPoll,
+	startVotingPhase: startVotingPhase,
+	castVote: castVote,
+	endVotingPhase: endVotingPhase,
+}

@@ -4,7 +4,8 @@
 	"description": "Backend for liquido.me with node, express and CouchDB",
 	"main": "index.js",
 	"scripts": {
-		"start": "node index.js"
+		"start": "node index.js",
+		"test": "mocha"
 	},
 	"keywords": [
 		"liquido"
@@ -12,8 +13,12 @@
 	"author": "Doogie",
 	"license": "MIT",
 	"dependencies": {
+		"debug": "^4.1.1",
 		"express": "^4.17.1",
 		"mongoose": "^5.10.0",
 		"nano": "^8.2.2"
+	},
+	"devDependencies": {
+		"mocha": "^8.1.3"
 	}
 }
