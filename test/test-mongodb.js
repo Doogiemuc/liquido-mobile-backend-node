@@ -4,15 +4,16 @@
 var assert = require('assert')
 var config = require('../config.int.js')
 var mongoDB = require('../liquido.mongoDB')
+var LOG = require('loglevel').getLogger("mongoDB");
+LOG.enableAll()    // Uncomment to enable all log levels (debug, trace, ...)
 
-
-describe('MongoDB', function () {
-	describe('Happy Case', function () {
+describe('LIQUIDO MOBILE MongoDB Tests', function () {
+	describe('Happy Case - Test', function () {
 
 		before("setup mongoDB", function () {
+			LOG.info("Starting tests. PurgeDB")
 			return mongoDB.connectToDB()
 				.then(mongoDB.purgeDB)
-			//.then(mongoDB.createMongoosSchemas)
 		})
 
 		after("disconnect from mongoDB", function () {
@@ -24,14 +25,16 @@ describe('MongoDB', function () {
 
 		it('Create a new team', function () {
 			let now = Date.now()
-			let teamName = 'teamFromTest' + now
-			let adminName = 'Admin Name' + now
+			let teamName = 'teamFromTest ' + now
+			let adminName = 'Admin Name_' + now
 			let adminEmail = 'testuser' + now + '@liquido.me'
 			return mongoDB.createTeam(teamName, adminName, adminEmail).then(createdTeam => {
 				//console.log("Created new team", createdTeam)
 				team = createdTeam
 			})
 		})
+
+		/*
 
 		it('Join existing team', async function () {
 			assert.ok(team, "Need a team")
@@ -78,6 +81,8 @@ describe('MongoDB', function () {
 			//console.log("-------------- cast Vote, voteOrder:", voteOrder)
 			return mongoDB.castVote(poll._id, voteOrder)
 		})
+
+		*/
 
 
 	})

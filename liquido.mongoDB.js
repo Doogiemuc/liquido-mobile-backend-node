@@ -3,21 +3,31 @@
  */
 var config = require('./config.int.js')
 var mongoose = require('mongoose');
-const { raw } = require('express');
 var Schema = mongoose.Schema
 
-// Mongoose models
+
+/**
+ * Mongoose models that will be exported
+ */
 let User, Team, Poll, Proposal
+
+
+
 
 /** Connect to the mongo database. */
 async function connectToDB() {
 	LOG.info("Connecting to MongoDB as " + config.DB_USER + " at " + config.DB_HOST)
 
 	// Need to use { dbName: ... }  https://stackoverflow.com/questions/48917591/fail-to-connect-mongoose-to-atlas
-	await mongoose.connect(config.DB_URI, { dbName: config.DB_NAME, useNewUrlParser: true, useUnifiedTopology: true })
+	try {
+		await mongoose.connect(config.DB_URI, { dbName: config.DB_NAME, useNewUrlParser: true, useUnifiedTopology: true, useCreateIndex: true })
+	} catch (err) {
+		LOG.error("Cannot connect to DB", err)
+		throw err
+	}
 
 	const db = mongoose.connection;
-	db.on('error', console.error.bind(console, 'MongoDB connection error:'));
+	db.on('error', err => LOG.error("Mongoose connection error", err));
 
 	await db.once('open', function () {
 		LOG.debug(" ... [OK]\n")
@@ -29,6 +39,9 @@ async function disconnectDB() {
 	return mongoose.disconnect()
 }
 
+/**
+ * DELETE all collections in the current DB.   BE CAREFULL!!!
+ */
 async function purgeDB() {
 	return mongoose.connection.db.listCollections().toArray().then(collections => {
 		if (!collections) return Promise.resolve("Nothing to remove")
@@ -46,9 +59,18 @@ async function purgeDB() {
 	*/
 }
 
-/** Create the mongoose schemas (Entity Classes) */
+function createMongoosSchemas() {
+	LOG.debug("Creating mongoose schemas and models.")
+	var teamSchema = new Schema(require('./schemas/team'), { timestamps: true })
+	Team = mongoose.model('team', teamSchema)
+}
+
+
+/** Create the mongoose schemas (Entity Classes) 
 function createMongoosSchemas() {
 	LOG.debug("Creating mongoose schemas")
+
+
 	var teamSchema = new Schema({
 		teamname: {
 			type: String,
@@ -168,7 +190,7 @@ function createMongoosSchemas() {
 			ref: 'proposal',
 		}]
 	})
-	*/
+	
 
 	Team = mongoose.model('team', teamSchema)
 	User = mongoose.model('liquido-user', userSchema)
@@ -176,6 +198,7 @@ function createMongoosSchemas() {
 	Proposal = mongoose.model('proposal', proposalSchema)
 	//Ballot = mongoose.model('ballot', ballotSchema)
 }
+*/
 
 /** Create a new team with an admin */
 async function createTeam(teamName, adminName, adminEmail) {
@@ -185,6 +208,19 @@ async function createTeam(teamName, adminName, adminEmail) {
 	if (!teamName) return Promise.reject("Need teamName")
 	if (!adminName) return Promise.reject("Need adminName")
 	if (!adminEmail) return Promise.reject("Need adminEmail")
+
+
+	return Team.create({ teamname: teamName, members: [{ name: adminName, email: adminEmail }] })
+		.then(savedTeam => {
+			LOG.debug("New team created", savedTeam)
+			return savedTeam
+		})
+		.catch(err => {
+			LOG.error("Could not create team '%s': %s", teamName, err)
+			return Promise.reject(err)
+		})
+
+	/*
 
 	// 1. check if admin user already exists 
 	let adminQuery = User.where({ email: adminEmail })
@@ -204,6 +240,8 @@ async function createTeam(teamName, adminName, adminEmail) {
 		}
 		return Promise.reject(err)
 	}
+
+	*/
 }
 
 /** Get info about one specific team given by its teamname */
@@ -302,10 +340,15 @@ async function endVotingPhase(pollId) {
 	return poll.save()
 }
 
-//
+// ================================================================================================
 // Debugging and logging utilities   
-//MAYBE: Use https://github.com/winstonjs/winston for logging but currently this little goody is all I need
+
+
+
+// https://github.com/winstonjs/winston is a nice node JS logging lib.
+
 /*
+// Another alternative  could even be plain node.util logging. But doesn't support log everything "above" a given level.
 var util = require('util')
 const LOG = {
 	debug: require('debug')('mongoDB:debug'),
@@ -317,6 +360,7 @@ LOG.raw.log = function (...args) {
 	return process.stderr.write(util.format(...args));
 }
 */
+
 
 var LOG = require('loglevel').getLogger("mongoDB");
 var originalFactory = LOG.methodFactory;
@@ -330,62 +374,9 @@ LOG.methodFactory = function (methodName, logLevel, loggerName) {
 		rawMethod.apply(undefined, messages)
 	}
 }
-LOG.enableAll()
+//LOG.enableAll()
+//LOG.setDefaultLevel('warn')
 
-
-/*
-const ttt = "team-4711"
-
-async function runUnitTests() {
-	try {
-
-		let createdTeam = await createTeam(ttt, "Admin Name", ttt + "@liquido.me")
-
-		LOG.info("join team:")
-		let joinedTeam = await joinTeam(createdTeam.inviteCode, "User Joined", "asdfads@asdfasd.de")
-		LOG.info("---------- joined Team\n", joinedTeam)
-
-		let createdPoll = await createPoll(joinedTeam._id, "Just a poll title")
-		LOG.info("---------- Created Poll")
-		LOG.json(createdPoll)
-
-		let fetchedTeam = await getTeam(ttt)
-		LOG.info("---------- fetched Team\n", fetchedTeam)
-
-		let polls = await getPollsOfTeam(joinedTeam._id)
-		LOG.debug("--------------- Received Polls of Team\n", polls)
-
-		let auser = await User.findOne()
-
-		let poll
-		poll = await addProposalToPoll(polls[0]._id, "Proposal Title " + Date.now(), "This is a very long description", auser._id)
-		poll = await addProposalToPoll(polls[0]._id, "Proposal Zwei  " + Date.now(), "This is a very lonasfdaf a df g description", auser._id)
-		LOG.debug("--------------- Poll as returned\n", poll)
-
-		let ppp = await Poll.findById(poll._id).populate('proposals').exec()
-		LOG.debug("--------------- ppp when loaded and populated\n", ppp)
-
-		await startVotingPhase(poll._id)
-
-		let voteOrder = [poll.proposals[0]._id, poll.proposals[1]._id]
-		LOG.debug("-------------- cast Vote, voteOrder:", voteOrder)
-		await castVote(poll._id, voteOrder)
-
-		await endVotingPhase(poll._id)
-
-
-	} catch (e) {
-		LOG.error("=== FATAL ===")
-		LOG.json(e)
-	}
-}
-
-connectToDB()
-	.then(purgeDB)
-	.then(createMongoosSchemas)
-	.then(runUnitTests)
-
-*/
 
 LOG.debug("Setting up LIQUIDO mongoDB")
 createMongoosSchemas()
@@ -397,7 +388,7 @@ module.exports = {
 	disconnectDB: disconnectDB,
 	createMongoosSchemas: createMongoosSchemas,
 
-	// Mongoose models (e.g. with .findOne(), query() ... methods)
+	// Mongoose models that have the CRUD methods, e.g, .findOne(), .query(), ...
 	User: User,
 	Team: Team,
 	Poll: Poll,
