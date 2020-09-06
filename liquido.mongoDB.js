@@ -5,13 +5,10 @@ var config = require('./config.int.js')
 var mongoose = require('mongoose');
 var Schema = mongoose.Schema
 
-
 /**
  * Mongoose models that will be exported
  */
-let User, Team, Poll, Proposal
-
-
+let Team, Poll
 
 
 /** Connect to the mongo database. */
@@ -61,196 +58,41 @@ async function purgeDB() {
 
 function createMongoosSchemas() {
 	LOG.debug("Creating mongoose schemas and models.")
+
 	var teamSchema = new Schema(require('./schemas/team'), { timestamps: true })
 	Team = mongoose.model('team', teamSchema)
-}
 
-
-/** Create the mongoose schemas (Entity Classes) 
-function createMongoosSchemas() {
-	LOG.debug("Creating mongoose schemas")
-
-
-	var teamSchema = new Schema({
-		teamname: {
-			type: String,
-			required: "Teamname is required",
-			unique: true
-		},
-		admin: {
-			type: Schema.Types.ObjectId,
-			ref: 'liquido-user'
-		},
-		inviteCode: {
-			type: String,
-			required: "Team needs an inviteCode",
-			unique: true
-		},
-		members: [{
-			type: Schema.Types.ObjectId,
-			ref: 'liquido-user'
-		}]
-	})
-
-	var userSchema = new Schema({
-		name: {
-			type: String,
-			trim: true,
-			required: "User name is required",
-		},
-		email: {
-			type: String,
-			trim: true,
-			lowercase: true,
-			// unique: true,   //TODO: can one email be the admin of several teams?
-			required: 'Email address is required',
-			//validate: [validateEmail, 'Please fill a valid email address'],
-			match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Please provide a valid email address'],
-		}
-	})
-
-	var pollSchema = new Schema({
-		team: {
-			type: Schema.Types.ObjectId,
-			ref: 'team',
-			required: true
-		},
-		title: {
-			type: String,
-			trim: true,
-			required: "Poll title is required",
-		},
-		status: {
-			type: String,
-			required: true,
-			default: "ELABORATION"
-		},
-		proposals: [{
-			type: Schema.Types.ObjectId,
-			ref: 'proposal'
-		}],
-		winner: {
-			type: Schema.Types.ObjectId,
-			ref: 'proposal',
-			required: false,
-			default: undefined
-		},
-		ballots: [{
-			voteOrder: [{
-				type: Schema.Types.ObjectId,
-				ref: 'proposal',
-			}]
-		}],
-		createdAt: {
-			type: Date,
-			default: Date.now
-		},
-		votingStartAt: {
-			type: Date
-		},
-		votingEndAt: {
-			type: Date
-		}
-	})
-
-	var proposalSchema = new Schema({
-		title: {
-			type: String,
-			trim: true,
-			unique: true,
-			required: "Proposal title is required",
-		},
-		description: {
-			type: String,
-			trim: true,
-			required: "Proposal description is required",
-		},
-		//TODO: supporters
-		poll: {
-			type: Schema.Types.ObjectId,
-			ref: 'poll',
-			required: true
-		},
-		createdBy: {
-			type: Schema.Types.ObjectId,
-			ref: 'liquido-user',
-			required: true
-		},
-		createdAt: {
-			type: Date,
-			default: Date.now
-		},
-	})
-
-	/*
-	var ballotSchema = new Schema({
-		//rightToVote: ...
-		voteOrder: [{
-			type: Schema.Types.ObjectId,
-			ref: 'proposal',
-		}]
-	})
-	
-
-	Team = mongoose.model('team', teamSchema)
-	User = mongoose.model('liquido-user', userSchema)
+	var pollSchema = new Schema(require('./schemas/poll'), { timestamps: false })
 	Poll = mongoose.model('poll', pollSchema)
-	Proposal = mongoose.model('proposal', proposalSchema)
-	//Ballot = mongoose.model('ballot', ballotSchema)
 }
-*/
+
+
+
+
 
 /** Create a new team with an admin */
 async function createTeam(teamName, adminName, adminEmail) {
-	LOG.debug("createTeam(%s, %s, %s)", teamName, adminName, adminEmail)
-
-	// 0. sanity check
+	//LOG.debug("createTeam(%s, %s, %s)", teamName, adminName, adminEmail)
+	// sanity check
 	if (!teamName) return Promise.reject("Need teamName")
 	if (!adminName) return Promise.reject("Need adminName")
 	if (!adminEmail) return Promise.reject("Need adminEmail")
 
-
+	// Create Team with admin, inviteCode is automatically calculated.
 	return Team.create({ teamname: teamName, members: [{ name: adminName, email: adminEmail }] })
 		.then(savedTeam => {
-			LOG.debug("New team created", savedTeam)
+			LOG.info("New team created", JSON.stringify(savedTeam))
 			return savedTeam
 		})
 		.catch(err => {
 			LOG.error("Could not create team '%s': %s", teamName, err)
 			return Promise.reject(err)
 		})
-
-	/*
-
-	// 1. check if admin user already exists 
-	let adminQuery = User.where({ email: adminEmail })
-	let admin = await adminQuery.findOne()
-	if (!admin) admin = new User({ name: adminName, email: adminEmail })
-
-	// 2. Create and save the new Team. Link admin user into team.
-	let inviteCode = Math.floor(Math.random() * 0xFFFFFF).toString(16);
-	let team = new Team({ teamname: teamName, inviteCode: inviteCode })
-	try {
-		let savedAdmin = await admin.save()
-		team.admin = savedAdmin._id
-		return await team.save()
-	} catch (err) {
-		if (err.name === 'MongoError' && err.code === 11000) {
-			return Promise.reject({ err: "Cannot createTeam, duplicate key", keyValue: err.keyValue })
-		}
-		return Promise.reject(err)
-	}
-
-	*/
 }
 
 /** Get info about one specific team given by its teamname */
 async function getTeam(teamname) {
-	return Team
-		.findOne({ teamname: teamname })
-		.populate('admin')
-		.populate('members')
-		.exec()
+	return Team.findOne({ teamname: teamname })
 		.catch(err => {
 			return Promise.reject("Cannot getTeam(" + teamname + "): " + err)
 		})
@@ -260,20 +102,20 @@ async function getTeam(teamname) {
 async function joinTeam(inviteCode, username, userEmail) {
 	LOG.info("joinTeam(inviteCode=" + inviteCode + ")")
 	let team = await Team.findOne({ inviteCode: inviteCode })
-	if (!team) return Promise.reject("Cannot find this inviteCode")
-	let user = new User({ name: username, email: userEmail })
-	await user.save()
-	team.members.push(user)
+	if (!team) return Promise.reject("Cannot joinTeam: inviteCode " + inviteCode + " is invalid!")
+	let newUser = { name: username, email: userEmail }
+	team.members.push(newUser)
 	return team.save()
 }
 
 async function createPoll(teamId, pollTitle) {
+	if (!pollTitle) return Promise.reject("Cannot create Poll. Need pollTitle!")
 	let team = await Team.findOne({ _id: teamId })
-	if (!team) return Promise.reject("Cannot create Poll. Team not found (team._id=" + teamId + ")")
-	let poll = new Poll({ title: pollTitle, team: team._id })
-	await poll.save()
-	LOG.info("Created new poll ", poll)
-	return Promise.resolve(poll)
+	if (!team) return Promise.reject("Cannot create Poll. Team(id=" + teamId + ") not found!")
+	return Poll.create({ team: teamId, title: pollTitle, foo: "bar" }).then(createdPoll => {
+		LOG.info("Created new poll ", JSON.stringify(createdPoll))
+		return createdPoll
+	})
 }
 
 async function getPollsOfTeam(teamId) {
@@ -367,7 +209,8 @@ var originalFactory = LOG.methodFactory;
 LOG.methodFactory = function (methodName, logLevel, loggerName) {
 	var rawMethod = originalFactory(methodName, logLevel, loggerName)
 	return function () {
-		var messages = [loggerName, "[" + methodName.toUpperCase() + "]"];
+		var prefix = "         "
+		var messages = [prefix, '[' + loggerName + '.' + methodName.toUpperCase() + ']'];
 		for (var i = 0; i < arguments.length; i++) {
 			messages.push(arguments[i])
 		}
@@ -389,11 +232,8 @@ module.exports = {
 	createMongoosSchemas: createMongoosSchemas,
 
 	// Mongoose models that have the CRUD methods, e.g, .findOne(), .query(), ...
-	User: User,
 	Team: Team,
 	Poll: Poll,
-	Proposal: Team,
-	//Ballot: Ballot,
 
 	// Use cases
 	createTeam: createTeam,

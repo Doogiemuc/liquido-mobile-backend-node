@@ -3,7 +3,8 @@
  */
 var assert = require('assert')
 var config = require('../config.int.js')
-var mongoDB = require('../liquido.mongoDB')
+var mongoDB = require('../liquido.mongoDB');
+const { createPoll } = require('../liquido.mongoDB');
 var LOG = require('loglevel').getLogger("mongoDB");
 LOG.enableAll()    // Uncomment to enable all log levels (debug, trace, ...)
 
@@ -29,12 +30,11 @@ describe('LIQUIDO MOBILE MongoDB Tests', function () {
 			let adminName = 'Admin Name_' + now
 			let adminEmail = 'testuser' + now + '@liquido.me'
 			return mongoDB.createTeam(teamName, adminName, adminEmail).then(createdTeam => {
-				//console.log("Created new team", createdTeam)
+				assert.ok(createdTeam.inviteCode)
+				assert.equal(createdTeam.inviteCode.length, 6, "team.inviteCode should be 6 characters long")
 				team = createdTeam
 			})
 		})
-
-		/*
 
 		it('Join existing team', async function () {
 			assert.ok(team, "Need a team")
@@ -46,10 +46,14 @@ describe('LIQUIDO MOBILE MongoDB Tests', function () {
 
 		it('Create poll', function () {
 			assert.ok(team, "Need a team")
-			return mongoDB.createPoll(team._id, "Just a poll title").then(createdPoll => {
+			let pollTitle = "Just a poll title"
+			return mongoDB.createPoll(team._id, pollTitle).then(createdPoll => {
 				assert.ok(createdPoll, "Expected a newly created poll")
+				assert.equal(createdPoll.title, pollTitle)
 			})
 		})
+
+		/*
 
 		it('Add two proposals to poll', async function () {
 			assert.ok(team, "Need a team")

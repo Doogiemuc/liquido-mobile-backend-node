@@ -22,6 +22,7 @@ var Schema = mongoose.Schema
  */
 var SAFE_CHARS = 'ABCDEFGHKLMNPQRSTUVWXYZ23456789'   // no 1,I,J, and no O,0 because these charsacters can be accidentically swapped so easily when printed.
 var createInviteCode = function (str, len = 6) {
+	if (!str) throw new Error("Need str to create invite code!")
 	var hash = 0;
 	for (var i = 0; i < str.length; i++) {
 		hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -30,19 +31,21 @@ var createInviteCode = function (str, len = 6) {
 	var pos = 0
 	for (let i = 0; i < len; i++) {
 		pos = (pos + hash) % SAFE_CHARS.length
-		inviteCode += SAFE_CHARS[pos]
+		inviteCode += SAFE_CHARS[Math.abs(pos)]
 	}
 	return inviteCode;
 }
 
 module.exports = {
 
+	// Name of this time
 	teamname: {
 		type: String,
 		required: "Teamname is required",
 		unique: true
 	},
 
+	// Invite code that can easily be shared to other users
 	inviteCode: {
 		type: String,
 		required: "Team needs an inviteCode",

@@ -4,17 +4,23 @@ var Schema = mongoose.Schema
 /**
  * Mongoose Schema for a Poll with its proposals and also casted ballots
  */
-export default {
+module.exports = {
+
+	// Mongoose reference to the team
 	team: {
 		type: Schema.Types.ObjectId,
 		ref: 'team',
 		required: true
 	},
+
+	// Title of this poll
 	title: {
 		type: String,
 		trim: true,
 		required: "Poll title is required",
 	},
+
+	// Poll status
 	status: {
 		type: String,
 		required: true,
@@ -65,10 +71,7 @@ export default {
 		default: undefined
 	},
 
-	createdAt: {
-		type: Date,
-		default: Date.now
-	},
+	// Start and end of voting phase. Can be triggered by admin.
 	votingStartAt: {
 		type: Date,
 		default: undefined
@@ -77,4 +80,8 @@ export default {
 		type: Date,
 		default: undefined
 	}
+
+	// createdAt, updatedAt will automatically be added by Mongoose
+
+
 }
