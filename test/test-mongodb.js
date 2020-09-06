@@ -18,17 +18,24 @@ describe('LIQUIDO MOBILE MongoDB Tests', function () {
 		})
 
 		after("disconnect from mongoDB", function () {
+			console.log(" ")
 			return mongoDB.disconnectDB()
 		})
 
+		beforeEach(function () {
+			console.log("\n\n------------------------", this.currentTest.title, "----------------------")
+		})
+
+		// Global vars for use in each test case
 		let team
+		let teamName
 		let poll
 
 		it('Create a new team', function () {
 			let now = Date.now()
-			let teamName = 'teamFromTest ' + now
+			teamName = 'teamFromTest ' + now
 			let adminName = 'Admin Name_' + now
-			let adminEmail = 'testuser' + now + '@liquido.me'
+			let adminEmail = 'admin' + now + '@liquido.me'
 			return mongoDB.createTeam(teamName, adminName, adminEmail).then(createdTeam => {
 				assert.ok(createdTeam.inviteCode)
 				assert.equal(createdTeam.inviteCode.length, 6, "team.inviteCode should be 6 characters long")
@@ -39,12 +46,17 @@ describe('LIQUIDO MOBILE MongoDB Tests', function () {
 		it('Join existing team', async function () {
 			assert.ok(team, "Need a team")
 			assert.ok(team.inviteCode, "Need inviteCode")
-			return mongoDB.joinTeam(team.inviteCode, "User Joined", "joinedUser@liquido.me").then(joinedTeam => {
+			let now = Date.now()
+			let userName = 'User Name_' + now
+			let userEmail = 'user' + now + '@liquido.me'
+			return mongoDB.joinTeam(team.inviteCode, userName, userEmail).then(joinedTeam => {
 				assert.ok(joinedTeam, "Expected a joined team")
+				assert.ok(joinedTeam.members.find(member => member.email === userEmail), "userEmail should be member of team")
+				team = joinedTeam
 			})
 		})
 
-		it('Create poll', function () {
+		it('Create poll', async function () {
 			assert.ok(team, "Need a team")
 			let pollTitle = "Just a poll title"
 			return mongoDB.createPoll(team._id, pollTitle).then(createdPoll => {
@@ -53,28 +65,28 @@ describe('LIQUIDO MOBILE MongoDB Tests', function () {
 			})
 		})
 
-		/*
-
 		it('Add two proposals to poll', async function () {
 			assert.ok(team, "Need a team")
+			assert.ok(team.members.length >= 2, "Need at least two users in the team")
 			let polls = await mongoDB.getPollsOfTeam(team._id)
 			assert.ok(polls.length > 0, "Need at least one poll to add proposal!")
-			poll = polls[0]
-			let users = await mongoDB.User.find().limit(2)
-			assert.ok(users.length === 2, "Need at least two users to add proposals")
+			poll = polls[0]  // Store for later use in next test steps
 
-			return Promise.all(users.map(user => {
-				return mongoDB.addProposalToPoll(poll._id, "Proposal by " + user.name, "Some Description", user._id)
-			}))
+			return Promise.all([
+				mongoDB.addProposalToPoll(polls[0]._id, "Proposal by " + team.members[0].name, "Some description  ", team.members[0]._id),
+				mongoDB.addProposalToPoll(polls[0]._id, "Proposal by " + team.members[1].name, "Second description", team.members[1]._id)
+			])
 		})
 
-		it('Find and populate poll', async function () {
-			poll = await mongoDB.Poll.findById(poll._id).populate('proposals').exec()
-			//console.log("Populated poll\n\n", poll)
+		it('Find poll and populate team', async function () {
+			poll = await mongoDB.Poll.findById(poll._id).populate('team').exec()
+			//LOG.debug("Populated poll\n\n", poll)
 			assert.ok(poll)
 			assert.ok(poll._id)
+			assert.equal(poll.team.teamname, teamName)
 			assert.ok(poll.proposals[1]._id, "Poll should have at least two proposals")
 		})
+
 
 		it('Start voting phase', async function () {
 			return mongoDB.startVotingPhase(poll._id)
@@ -85,9 +97,6 @@ describe('LIQUIDO MOBILE MongoDB Tests', function () {
 			//console.log("-------------- cast Vote, voteOrder:", voteOrder)
 			return mongoDB.castVote(poll._id, voteOrder)
 		})
-
-		*/
-
 
 	})
 })

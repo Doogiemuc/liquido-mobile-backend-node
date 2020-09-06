@@ -124,23 +124,17 @@ async function getPollsOfTeam(teamId) {
 
 async function addProposalToPoll(pollId, propTitle, propDescription, createdById) {
 	LOG.debug("addProposalToPoll(pollId=%s, propTitle='%s', description='...', createdById=%s)", pollId, propTitle, createdById)
-	let poll = await Poll.findOne({ _id: pollId }).populate('proposals')
+	let poll = await Poll.findOne({ _id: pollId })
 	if (!poll) return Promise.reject("Cannot addProposalToPoll. Poll not found (poll._id=" + pollId + ")")
 	if (poll.status !== "ELABORATION") return Promise.reject("Cannot addProposalToPoll. Poll(id=" + pollId + ") must be in status ELABORATION.")
+
 	// user must not have a proposal in this poll yet!
 	let userIds = poll.proposals.map(prop => prop.createdBy)
 	if (userIds.includes(createdById)) return Promise.reject("Cannot addProposalToPoll. User(id=" + createdById + ") already has a proposal in poll(id=" + pollId + ")")
 
-	let prop = new Proposal({
-		title: propTitle,
-		description: propDescription,
-		createdBy: createdById,
-		poll: pollId,
-	})
-	await prop.save()
-	poll.proposals.push(prop)
+	poll.proposals.push({ title: propTitle, description: propDescription, createdBy: createdById })
 	return poll.save().then(savedPoll => {
-		LOG.info("Added proposal to poll(id=" + poll._id + ")")
+		LOG.info("Added proposal '" + propTitle + "' to poll(id=" + poll._id + ")")
 		return savedPoll
 	})
 }
