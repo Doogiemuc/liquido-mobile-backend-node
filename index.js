@@ -11,16 +11,23 @@ app.get('/', (req, res) => {
 })
 
 /**
- * Create a new Team 
+ * Create a new Team
+ * POST request body:
+ *   
+ *   {
+ *     teamName: String,
+ *     adminName: String,
+ *     adminEmail: EMail
+ *   }
+ * 
  * Returns 
  *  - HTTP 201 Created on success
  *  - HTTP 409 Conflict when this teamname already exists
  *  - HTTP 500 on error
  */
 app.post('/createTeam', (req, res) => {
-	let newTeam = req.body
 	liquidoDB
-		.createNewTeam(newTeam)
+		.createNewTeam(req.body)
 		.then(createdTeam => {
 			res.status(201).send("New Team created successfully.")
 		})

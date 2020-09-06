@@ -39,9 +39,9 @@ var createInviteCode = function (str, len = 6) {
 module.exports = {
 
 	// Name of this time
-	teamname: {
+	teamName: {
 		type: String,
-		required: "Teamname is required",
+		required: "teamName is required",
 		unique: true
 	},
 
@@ -50,7 +50,7 @@ module.exports = {
 		type: String,
 		required: "Team needs an inviteCode",
 		default: function () {
-			return createInviteCode(this.teamname)
+			return createInviteCode(this.teamName)
 		},
 		unique: true
 	},

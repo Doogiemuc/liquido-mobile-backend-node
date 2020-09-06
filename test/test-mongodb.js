@@ -28,15 +28,16 @@ describe('LIQUIDO MOBILE MongoDB Tests', function () {
 
 		// Global vars for use in each test case
 		let team
-		let teamName
 		let poll
 
-		it('Create a new team', function () {
+		it('Create a new team', async function () {
 			let now = Date.now()
-			teamName = 'teamFromTest ' + now
-			let adminName = 'Admin Name_' + now
-			let adminEmail = 'admin' + now + '@liquido.me'
-			return mongoDB.createTeam(teamName, adminName, adminEmail).then(createdTeam => {
+			var newTeam = {
+				teamName: 'teamFromTest ' + now,
+				adminName: 'Admin Name_' + now,
+				adminEmail: 'admin' + now + '@liquido.me'
+			}
+			return mongoDB.createTeam(newTeam).then(createdTeam => {
 				assert.ok(createdTeam.inviteCode)
 				assert.equal(createdTeam.inviteCode.length, 6, "team.inviteCode should be 6 characters long")
 				team = createdTeam
@@ -62,6 +63,7 @@ describe('LIQUIDO MOBILE MongoDB Tests', function () {
 			return mongoDB.createPoll(team._id, pollTitle).then(createdPoll => {
 				assert.ok(createdPoll, "Expected a newly created poll")
 				assert.equal(createdPoll.title, pollTitle)
+				poll = createdPoll
 			})
 		})
 
@@ -71,7 +73,6 @@ describe('LIQUIDO MOBILE MongoDB Tests', function () {
 			let polls = await mongoDB.getPollsOfTeam(team._id)
 			assert.ok(polls.length > 0, "Need at least one poll to add proposal!")
 			poll = polls[0]  // Store for later use in next test steps
-
 			return Promise.all([
 				mongoDB.addProposalToPoll(polls[0]._id, "Proposal by " + team.members[0].name, "Some description  ", team.members[0]._id),
 				mongoDB.addProposalToPoll(polls[0]._id, "Proposal by " + team.members[1].name, "Second description", team.members[1]._id)
@@ -79,12 +80,13 @@ describe('LIQUIDO MOBILE MongoDB Tests', function () {
 		})
 
 		it('Find poll and populate team', async function () {
-			poll = await mongoDB.Poll.findById(poll._id).populate('team').exec()
-			//LOG.debug("Populated poll\n\n", poll)
-			assert.ok(poll)
-			assert.ok(poll._id)
-			assert.equal(poll.team.teamname, teamName)
-			assert.ok(poll.proposals[1]._id, "Poll should have at least two proposals")
+			return mongoDB.Poll.findById(poll._id).populate('team').then(p => {
+				//LOG.debug("Populated poll\n\n", poll)
+				assert.ok(p._id)
+				assert.equal(p.team.teamName, team.teamName, "Team should have same teamname")
+				assert.ok(p.proposals[1]._id, "Poll should have at least two proposals")
+				poll = p
+			})
 		})
 
 

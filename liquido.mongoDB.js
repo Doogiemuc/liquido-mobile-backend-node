@@ -70,16 +70,24 @@ function createMongoosSchemas() {
 
 
 
-/** Create a new team with an admin */
+/** 
+ * Create a new team with the team's admin.
+ * The admin is the first member of the team.
+ * @param {String|Object} teamName, adminName and adminEmail, either as three parameters or one JSON objecct
+ * @return {Promise} saved team
+ */
 async function createTeam(teamName, adminName, adminEmail) {
-	//LOG.debug("createTeam(%s, %s, %s)", teamName, adminName, adminEmail)
+	if (arguments.length === 1) {
+		var { teamName, adminName, adminEmail } = arguments[0]
+	}
 	// sanity check
 	if (!teamName) return Promise.reject("Need teamName")
 	if (!adminName) return Promise.reject("Need adminName")
 	if (!adminEmail) return Promise.reject("Need adminEmail")
 
 	// Create Team with admin, inviteCode is automatically calculated.
-	return Team.create({ teamname: teamName, members: [{ name: adminName, email: adminEmail }] })
+	LOG.debug("createTeam(%s, %s, %s)", teamName, adminName, adminEmail)
+	return Team.create({ teamName: teamName, members: [{ name: adminName, email: adminEmail }] })
 		.then(savedTeam => {
 			LOG.info("New team created", JSON.stringify(savedTeam))
 			return savedTeam
@@ -91,15 +99,18 @@ async function createTeam(teamName, adminName, adminEmail) {
 }
 
 /** Get info about one specific team given by its teamname */
-async function getTeam(teamname) {
-	return Team.findOne({ teamname: teamname })
+async function getTeam(teamName) {
+	return Team.findOne({ teamName: teamName })
 		.catch(err => {
-			return Promise.reject("Cannot getTeam(" + teamname + "): " + err)
+			return Promise.reject("Cannot getTeam(" + teamName + "): " + err)
 		})
 }
 
 /** New user wants to join an existing team. User will be created. */
 async function joinTeam(inviteCode, username, userEmail) {
+	if (arguments.length === 1) {
+		var { inviteCode, username, userEmail } = arguments[0]
+	}
 	LOG.info("joinTeam(inviteCode=" + inviteCode + ")")
 	let team = await Team.findOne({ inviteCode: inviteCode })
 	if (!team) return Promise.reject("Cannot joinTeam: inviteCode " + inviteCode + " is invalid!")
