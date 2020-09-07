@@ -41,7 +41,10 @@ module.exports = {
 	// Name of this time
 	teamName: {
 		type: String,
-		required: "teamName is required",
+		required: [
+			function () { return this.teamName && this.teamName.length >= 4 },
+			"teamName must be at least 4 chars"
+		],
 		unique: true
 	},
 
