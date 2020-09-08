@@ -1,5 +1,6 @@
 # Environment configurations
 config.*.js
+config/
 
 # Logs
 logs
