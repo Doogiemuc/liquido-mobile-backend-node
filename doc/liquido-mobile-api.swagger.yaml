@@ -1,0 +1,124 @@
+openapi: "3.0.0"
+info:
+  title: Simple API overview
+  version: 0.1.0
+paths:
+  /:
+    get:
+      operationId: listVersionsv2
+      summary: List API versions
+      responses:
+        '200':
+          description: |-
+            default response
+          content:
+            application/json:
+              examples: 
+                foo:
+                  value:
+                    {
+                      "versions": [
+                        {
+                            "status": "CURRENT",
+                            "updated": "2011-01-21T11:33:21Z",
+                            "id": "v2.0",
+                            "links": [
+                                {
+                                    "href": "http://127.0.0.1:8774/v2/",
+                                    "rel": "self"
+                                }
+                            ]
+                        },
+                        {
+                            "status": "EXPERIMENTAL",
+                            "updated": "2013-07-23T11:33:21Z",
+                            "id": "v3.0",
+                            "links": [
+                                {
+                                    "href": "http://127.0.0.1:8774/v3/",
+                                    "rel": "self"
+                                }
+                            ]
+                        }
+                      ]
+                    }
+        
+  /createTeam:
+    post:
+      operationId: createTeam
+      summary: Create a new team
+      description: |-
+        When a new user creates a new team, then he automatically also becomes the admin of this team.
+        Anyone may create a new team. 
+        
+        The `POST /createTeam` call also returns an `invitationCode` that 
+        the admin can share with other users so that they can then join this team
+        with a call to `/joinTeam`
+      requestBody:
+        description: create new team request body
+        content:
+          application/json:
+            schema:
+              type: object
+              required: ['teamName', 'adminName', 'adminEmail']
+              properties:
+                teamName:
+                  type: string
+                  example: "Name of your team"
+                adminName:
+                  type: string
+                  example: "Admin Name"
+                adminEmail:
+                  type: string
+                  example: "admin@liquido.me"
+      responses:
+        '201':
+          description: |-
+            New team successfully created
+          content:
+            application/json: 
+              examples:
+                successResponse:
+                  value:
+                    {
+                      "teamName": "Name of team",
+                      "invitationCode": "AB2D4F",
+                    }
+  /joinTeam:
+    post:
+      operationId: joinTeam
+      summary: Join an existing team
+      description: |-
+        When a team has been created, then further users may join this team.
+        Therefor they need an invitationCode from the team's admin.
+      requestBody:
+        description: create new team request body
+        content:
+          application/json:
+            schema:
+              type: object
+              required: ['invitationCode', 'name', 'email']
+              properties:
+                invitationCode:
+                  type: string
+                  example: "AB2D4F"
+                name:
+                  type: string
+                  example: "User Name"
+                email:
+                  type: string
+                  example: "example_user@liquido.me"
+      responses:
+        '201':
+          description: |-
+            New team successfully created
+          content:
+            application/json: 
+              examples:
+                successResponse:
+                  value:
+                    {
+                      "teamName": "Name of team",
+                      "invitationCode": "AB2D4F",
+                    }
+       
