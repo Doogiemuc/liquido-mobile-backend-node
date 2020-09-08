@@ -1,8 +1,8 @@
 /**
- * Basic tests for mongoDB and mongoose
+ * Liquido Mobile HTTP REST API Tests
  */
 var assert = require('assert')
-var config = require('../config.int.js')
+var config = require('../config.'+process.env.NODE_ENV+'.js')
 var mongoDB = require('../liquido.mongoDB');
 var LOG = require('loglevel').getLogger("mongoDB");
 //LOG.enableAll()    // Uncomment to enable all log levels (debug, trace, ...)
@@ -10,7 +10,7 @@ var LOG = require('loglevel').getLogger("mongoDB");
 describe('LIQUIDO MOBILE MongoDB Tests', function () {
 	describe('Happy Case - Test', function () {
 
-		before("PURGE mongoDB", function () {
+		before("setup mongoDB", function () {
 			LOG.info("Starting tests. PurgeDB")
 			return mongoDB.connectToDB()
 				.then(mongoDB.purgeDB)

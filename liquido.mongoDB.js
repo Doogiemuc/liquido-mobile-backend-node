@@ -4,6 +4,9 @@
 var config = require('./config.int.js')
 var mongoose = require('mongoose');
 var Schema = mongoose.Schema
+var LOG = require('loglevel').getLogger("mongoDB");
+LOG.enableAll()
+
 
 /**
  * Mongoose models that will be exported
@@ -11,7 +14,11 @@ var Schema = mongoose.Schema
 let Team, Poll
 
 
-/** Connect to the mongo database. */
+
+/** 
+ * Connect to the mongo database.
+ * DO NOT FORGET to call this. Mongoose will NOT complain if you forget it!!!
+ */
 async function connectToDB() {
 	LOG.info("Connecting to MongoDB as " + config.DB_USER + " at " + config.DB_HOST)
 
@@ -76,7 +83,7 @@ function createMongoosSchemas() {
  * @param {String|Object} teamName, adminName and adminEmail, either as three parameters or one JSON objecct
  * @return {Promise} saved team
  */
-async function createTeam(teamName, adminName, adminEmail) {
+async function createNewTeam(teamName, adminName, adminEmail) {
 	if (arguments.length === 1) {
 		var { teamName, adminName, adminEmail } = arguments[0]
 	}
@@ -87,15 +94,14 @@ async function createTeam(teamName, adminName, adminEmail) {
 
 	// Create Team with admin, inviteCode is automatically calculated.
 	LOG.debug("createTeam(%s, %s, %s)", teamName, adminName, adminEmail)
-	return Team.create({ teamName: teamName, members: [{ name: adminName, email: adminEmail }] })
-		.then(savedTeam => {
-			LOG.info("New team created", JSON.stringify(savedTeam))
-			return savedTeam
-		})
-		.catch(err => {
-			LOG.error("Could not create team '%s': %s", teamName, err)
-			return Promise.reject(err)
-		})
+	try {
+		let savedTeam = await Team.create({ teamName: teamName, members: [{ name: adminName, email: adminEmail }] })
+		LOG.info("New team created", JSON.stringify(savedTeam))
+		return savedTeam
+	} catch (err) {
+		LOG.error("Could not create team '%s': %s", teamName, err)
+		return Promise.reject(err)
+	}
 }
 
 /** Get info about one specific team given by its teamname */
@@ -209,7 +215,7 @@ LOG.raw.log = function (...args) {
 */
 
 
-var LOG = require('loglevel').getLogger("mongoDB");
+
 var originalFactory = LOG.methodFactory;
 LOG.methodFactory = function (methodName, logLevel, loggerName) {
 	var rawMethod = originalFactory(methodName, logLevel, loggerName)
@@ -222,10 +228,11 @@ LOG.methodFactory = function (methodName, logLevel, loggerName) {
 		rawMethod.apply(undefined, messages)
 	}
 }
-//LOG.enableAll()
-//LOG.setDefaultLevel('warn')
 
 
+//
+// ============== INIT =============
+//
 LOG.debug("Setting up LIQUIDO mongoDB")
 createMongoosSchemas()
 
@@ -241,7 +248,7 @@ module.exports = {
 	Poll: Poll,
 
 	// Use cases
-	createTeam: createTeam,
+	createNewTeam: createNewTeam,
 	joinTeam: joinTeam,
 	getTeam: getTeam,
 	createPoll: createPoll,
